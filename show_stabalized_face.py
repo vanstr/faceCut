@@ -1,5 +1,5 @@
 # USAGE
-# python show_stabalized_face.py --detector face_detection_model --embedding-model openface_nn4.small2.v1.t7 --shape-predictor shape_predictor_68_face_landmarks.dat
+# python show_stabalized_face.py --shape-predictor shape_predictor_68_face_landmarks.dat
 # import the necessary packages
 from imutils.video import VideoStream
 from imutils.video import FPS
@@ -15,14 +15,8 @@ import dlib
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--detector", required=True,
-                help="path to OpenCV's deep learning face detector")
-ap.add_argument("-m", "--embedding-model", required=True,
-                help="path to OpenCV's deep learning face embedding model")
 ap.add_argument("-p", "--shape-predictor", required=True,
                 help="path to facial landmark predictor")
-ap.add_argument("-c", "--confidence", type=float, default=0.5,
-                help="minimum probability to filter weak detections")
 args = vars(ap.parse_args())
 
 imgWidth = 500
@@ -50,7 +44,6 @@ while True:
     frame = vs.read()
 
     # frame = imutils.resize(frame, width=1200)
-    (h, w) = frame.shape[:2]
 
     # load the input image, resize it, and convert it to grayscale
     # image = frame
@@ -73,6 +66,7 @@ while True:
         # display the output images
         cv2.imshow("Original", faceOrig)
         cv2.imshow("Frame", faceAligned)
+        break
 
     # update the FPS counter
     fps.update()
