@@ -13,13 +13,17 @@ import cv2
 import os
 import dlib
 
+import ctypes
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--shape-predictor", required=True,
                 help="path to facial landmark predictor")
 args = vars(ap.parse_args())
 
-imgWidth = 500
+user32 = ctypes.windll.user32
+print("[INFO] 0 = " + str(user32.GetSystemMetrics(0)) + " 1 = " + str(user32.GetSystemMetrics(1)) )
+imgWidth = user32.GetSystemMetrics(0)
 
 # load our serialized face detector from disk
 print("[INFO] loading face detector...")
@@ -28,7 +32,7 @@ detector = dlib.get_frontal_face_detector()
 # initialize FaceAligner
 print("[INFO] initialize FaceAligner")
 predictor = dlib.shape_predictor(args["shape_predictor"])
-fa = FaceAligner(predictor, desiredLeftEye=(0.33, 0.33), desiredFaceWidth=imgWidth)
+fa = FaceAligner(predictor, desiredLeftEye=(0.38, 0.38), desiredFaceWidth=imgWidth)
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
@@ -50,22 +54,25 @@ while True:
     image = imutils.resize(frame, width=imgWidth)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # show the original input image and detect faces in the grayscale
-    # image
-    # cv2.imshow("Input", image)
-    rects = detector(gray, 2)
+    rects = detector(gray, 0)
 
+    print("[INFO] detected " + str(len(rects)) + " faces")
     # loop over the face detections
     for rect in rects:
         # extract the ROI of the *original* face, then align the face
         # using facial landmarks
         (x, y, w, h) = rect_to_bb(rect)
-        faceOrig = imutils.resize(image[y:y + h, x:x + w], width=imgWidth)
+        # faceOrig = imutils.resize(image[y:y + h, x:x + w], width=imgWidth)
         faceAligned = fa.align(image, gray, rect)
+        cut = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1))/2
+        (h2, w2) = faceAligned.shape[:2]
+        faceAligned = faceAligned[0:user32.GetSystemMetrics(0), cut:(w2 - cut)]
 
         # display the output images
-        cv2.imshow("Original", faceOrig)
-        cv2.imshow("Frame", faceAligned)
+        rotatedface = rotated = imutils.rotate_bound(faceAligned, 90)
+        cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("Frame", rotatedface)
         break
 
     # update the FPS counter
