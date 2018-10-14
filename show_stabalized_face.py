@@ -25,12 +25,12 @@ args = vars(ap.parse_args())
 
 user32 = ctypes.windll.user32
 print("[INFO] 0 = " + str(user32.GetSystemMetrics(0)) + " 1 = " + str(user32.GetSystemMetrics(1)))
-# imgWidth = user32.GetSystemMetrics(0)
-imgWidth = 300
+imgWidth = user32.GetSystemMetrics(0)
+# imgWidth = 300
 is_shown_face_model = False
 
 lastValidFaceRecognition = 0
-faceRecognitionStat = collections.deque([], 15)
+faceRecognitionStat = collections.deque([], 20)
 faceRecognitionStat.appendleft(False)
 
 print faceRecognitionStat
@@ -45,6 +45,7 @@ ser.isOpen()
 
 def move_face_model(move_forward):
     global ser
+    print("[INFO] move:" + str(move_forward))
     if move_forward:
         ser.write("F\n")
     else:
@@ -66,7 +67,7 @@ def update_face_model_state(face_recognition_stat):
     successful_recognition_amount = len(filter(lambda x: x, face_recognition_stat))
     print("[INFO] successful_recognition_amount" + str(successful_recognition_amount))
     if not is_shown_face_model:
-        if successful_recognition_amount > 5:
+        if successful_recognition_amount > 8:
             is_shown_face_model = True
             move_face_model(True)
             print("[INFO] Move on face model...")
@@ -123,40 +124,25 @@ while True:
         # find the closest face
         rect = get_the_biggest_face(rects)
         (x, y, w, h) = rect_to_bb(rect)
-        faceAligned = fa.align(image, gray, rect)
-        cv2.imshow("Frame", faceAligned)
-        # rotatedFace = imutils.rotate_bound(faceAligned, 90)
-        # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-        # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        # cv2.imshow("Frame", rotatedFace)
+        if w > 0:
+            faceOrig = imutils.resize(image[y:y + h, x:x + w], width=imgWidth)
+            faceAligned = fa.align(image, gray, rect)
+            cut = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
+            (h2, w2) = faceAligned.shape[:2]
+            faceAligned = faceAligned[0:user32.GetSystemMetrics(0), cut:(w2 - cut)]
+            # display the output images
+            rotatedface = imutils.rotate_bound(faceAligned, 270)
+            cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+            cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            cv2.imshow("Frame", rotatedface)
 
     update_face_model_state(faceRecognitionStat)
 
-    # cutFromSide = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
-    # (h2, w2) = faceAligned.shape[:2]
-    # faceAligned = faceAligned[0:h2, cutFromSide:(w2 - cutFromSide)]
-    # display rotated image in fullscreen
-    # rotatedFace = imutils.rotate_bound(faceAligned, 90)
-    # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-    # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    # cv2.imshow("Frame", rotatedFace)
-    #
-    # # loop over the face detections
-    # for rect in rects:
-    #     # align the face
-    #     (x, y, w, h) = rect_to_bb(rect)
-    #     faceAligned = fa.align(image, gray, rect)
-    #     cv2.imshow("Frame", rotatedFace)
-
-    # cutFromSide = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
-    # (h2, w2) = faceAligned.shape[:2]
-    # faceAligned = faceAligned[0:h2, cutFromSide:(w2 - cutFromSide)]
-    # display rotated image in fullscreen
-    # rotatedFace = imutils.rotate_bound(faceAligned, 90)
-    # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-    # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    # cv2.imshow("Frame", rotatedFace)
-    # break
+    if not is_shown_face_model:
+        blank_image = np.zeros((user32.GetSystemMetrics(1), user32.GetSystemMetrics(0), 3), np.uint8)
+        cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("Frame", blank_image)
 
     # update the FPS counter
     fps.update()
