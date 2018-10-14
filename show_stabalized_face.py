@@ -30,7 +30,7 @@ imgWidth = user32.GetSystemMetrics(0)
 is_shown_face_model = False
 
 lastValidFaceRecognition = 0
-faceRecognitionStat = collections.deque([], 20)
+faceRecognitionStat = collections.deque([], 15)
 faceRecognitionStat.appendleft(False)
 
 print faceRecognitionStat
@@ -67,7 +67,7 @@ def update_face_model_state(face_recognition_stat):
     successful_recognition_amount = len(filter(lambda x: x, face_recognition_stat))
     print("[INFO] successful_recognition_amount" + str(successful_recognition_amount))
     if not is_shown_face_model:
-        if successful_recognition_amount > 8:
+        if successful_recognition_amount > 5:
             is_shown_face_model = True
             move_face_model(True)
             print("[INFO] Move on face model...")
@@ -79,7 +79,7 @@ def update_face_model_state(face_recognition_stat):
 
 
 def get_the_biggest_face(rects):
-    biggest_width = 0
+    biggest_width = 150
     biggest_rect = None
     for rect in rects:
         (x, y, w, h) = rect_to_bb(rect)
@@ -123,18 +123,21 @@ while True:
     if is_found_face(detectedFacesNum, faceRecognitionStat) and is_shown_face_model:
         # find the closest face
         rect = get_the_biggest_face(rects)
-        (x, y, w, h) = rect_to_bb(rect)
-        if w > 0:
-            faceOrig = imutils.resize(image[y:y + h, x:x + w], width=imgWidth)
-            faceAligned = fa.align(image, gray, rect)
-            cut = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
-            (h2, w2) = faceAligned.shape[:2]
-            faceAligned = faceAligned[0:user32.GetSystemMetrics(0), cut:(w2 - cut)]
-            # display the output images
-            rotatedface = imutils.rotate_bound(faceAligned, 270)
-            cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-            cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-            cv2.imshow("Frame", rotatedface)
+        if rect is not None:
+            (x, y, w, h) = rect_to_bb(rect)
+            new_image = image[y:y + h, x:x + w]
+            (hNotNull, wNotNull) = new_image.shape[:2]
+            if w > 0 and wNotNull > 150 and hNotNull > 150:
+                faceOrig = imutils.resize(new_image, width=imgWidth)
+                faceAligned = fa.align(image, gray, rect)
+                cut = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
+                (h2, w2) = faceAligned.shape[:2]
+                faceAligned = faceAligned[0:user32.GetSystemMetrics(0), cut:(w2 - cut)]
+                # display the output images
+                rotatedface = imutils.rotate_bound(faceAligned, 270)
+                cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+                cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                cv2.imshow("Frame", rotatedface)
 
     update_face_model_state(faceRecognitionStat)
 
