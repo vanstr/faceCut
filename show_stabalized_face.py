@@ -12,8 +12,10 @@ import time
 import cv2
 import os
 import dlib
-
 import ctypes
+import collections
+import serial
+from collections import deque
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -22,8 +24,69 @@ ap.add_argument("-p", "--shape-predictor", required=True,
 args = vars(ap.parse_args())
 
 user32 = ctypes.windll.user32
-print("[INFO] 0 = " + str(user32.GetSystemMetrics(0)) + " 1 = " + str(user32.GetSystemMetrics(1)) )
-imgWidth = user32.GetSystemMetrics(0)
+print("[INFO] 0 = " + str(user32.GetSystemMetrics(0)) + " 1 = " + str(user32.GetSystemMetrics(1)))
+# imgWidth = user32.GetSystemMetrics(0)
+imgWidth = 300
+is_shown_face_model = False
+
+lastValidFaceRecognition = 0
+faceRecognitionStat = collections.deque([], 15)
+faceRecognitionStat.appendleft(False)
+
+print faceRecognitionStat
+
+ser = serial.Serial('COM4')
+
+if ser.isOpen():
+    ser.close()
+ser.open()
+ser.isOpen()
+
+
+def move_face_model(move_forward):
+    global ser
+    if move_forward:
+        ser.write("F\n")
+    else:
+        ser.write("B\n")
+
+
+def is_found_face(found_faces_num, face_recognition_stat):
+    print("[DEBUG] Arg:" + str(found_faces_num))
+    if found_faces_num > 0:
+        face_recognition_stat.appendleft(True)
+        return True
+    else:
+        face_recognition_stat.appendleft(False)
+        return False
+
+
+def update_face_model_state(face_recognition_stat):
+    global is_shown_face_model
+    successful_recognition_amount = len(filter(lambda x: x, face_recognition_stat))
+    print("[INFO] successful_recognition_amount" + str(successful_recognition_amount))
+    if not is_shown_face_model:
+        if successful_recognition_amount > 5:
+            is_shown_face_model = True
+            move_face_model(True)
+            print("[INFO] Move on face model...")
+    else:
+        if True not in face_recognition_stat:
+            is_shown_face_model = False
+            move_face_model(False)
+            print("[INFO] Hide face model...")
+
+
+def get_the_biggest_face(rects):
+    biggest_width = 0
+    biggest_rect = None
+    for rect in rects:
+        (x, y, w, h) = rect_to_bb(rect)
+        if biggest_width < w:
+            biggest_width = w
+            biggest_rect = rect
+    return biggest_rect
+
 
 # load our serialized face detector from disk
 print("[INFO] loading face detector...")
@@ -47,33 +110,53 @@ while True:
     # grab the frame from the threaded video stream
     frame = vs.read()
 
-    # frame = imutils.resize(frame, width=1200)
-
     # load the input image, resize it, and convert it to grayscale
-    # image = frame
     image = imutils.resize(frame, width=imgWidth)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+    # Detect faces
     rects = detector(gray, 0)
+    detectedFacesNum = len(rects)
+    print("[INFO] detected " + str(detectedFacesNum) + " faces")
 
-    print("[INFO] detected " + str(len(rects)) + " faces")
-    # loop over the face detections
-    for rect in rects:
-        # extract the ROI of the *original* face, then align the face
-        # using facial landmarks
+    if is_found_face(detectedFacesNum, faceRecognitionStat) and is_shown_face_model:
+        # find the closest face
+        rect = get_the_biggest_face(rects)
         (x, y, w, h) = rect_to_bb(rect)
-        # faceOrig = imutils.resize(image[y:y + h, x:x + w], width=imgWidth)
         faceAligned = fa.align(image, gray, rect)
-        cut = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1))/2
-        (h2, w2) = faceAligned.shape[:2]
-        faceAligned = faceAligned[0:user32.GetSystemMetrics(0), cut:(w2 - cut)]
+        cv2.imshow("Frame", faceAligned)
+        # rotatedFace = imutils.rotate_bound(faceAligned, 90)
+        # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+        # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        # cv2.imshow("Frame", rotatedFace)
 
-        # display the output images
-        rotatedface = rotated = imutils.rotate_bound(faceAligned, 90)
-        cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        cv2.imshow("Frame", rotatedface)
-        break
+    update_face_model_state(faceRecognitionStat)
+
+    # cutFromSide = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
+    # (h2, w2) = faceAligned.shape[:2]
+    # faceAligned = faceAligned[0:h2, cutFromSide:(w2 - cutFromSide)]
+    # display rotated image in fullscreen
+    # rotatedFace = imutils.rotate_bound(faceAligned, 90)
+    # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+    # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    # cv2.imshow("Frame", rotatedFace)
+    #
+    # # loop over the face detections
+    # for rect in rects:
+    #     # align the face
+    #     (x, y, w, h) = rect_to_bb(rect)
+    #     faceAligned = fa.align(image, gray, rect)
+    #     cv2.imshow("Frame", rotatedFace)
+
+    # cutFromSide = (user32.GetSystemMetrics(0) - user32.GetSystemMetrics(1)) / 2
+    # (h2, w2) = faceAligned.shape[:2]
+    # faceAligned = faceAligned[0:h2, cutFromSide:(w2 - cutFromSide)]
+    # display rotated image in fullscreen
+    # rotatedFace = imutils.rotate_bound(faceAligned, 90)
+    # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+    # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    # cv2.imshow("Frame", rotatedFace)
+    # break
 
     # update the FPS counter
     fps.update()
