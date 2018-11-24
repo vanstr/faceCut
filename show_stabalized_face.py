@@ -22,16 +22,20 @@ ap.add_argument("-p", "--shape-predictor", required=True,
                 help="path to facial landmark predictor")
 args = vars(ap.parse_args())
 
-user32 = ctypes.windll.user32
-wishedFaceImgWidth = int(user32.GetSystemMetrics(0) / 4)
-wishedFaceImgHeight = int(user32.GetSystemMetrics(1) / 4)
+#user32 = ctypes.windll.user32
+wishedFaceImgWidth = 480 #int(user32.GetSystemMetrics(0) / 4)
+wishedFaceImgHeight = 320 #int(user32.GetSystemMetrics(1) / 4)
 print("[INFO] 0 = " + str(wishedFaceImgWidth) + " 1 = " + str(wishedFaceImgHeight))
 minImgSize = int(wishedFaceImgWidth / 6)  # filter out users located too far
 imgWidth = wishedFaceImgWidth
+is_full_screen_mode = True
+
+
 is_shown_face_model = False
 
+
 lastValidFaceRecognition = 0
-faceRecognitionStat = collections.deque([], 25)
+faceRecognitionStat = collections.deque([], 15)
 faceRecognitionStat.appendleft(False)
 
 print(faceRecognitionStat)
@@ -148,18 +152,24 @@ while True:
                 (h2, w2) = faceAligned.shape[:2]
                 faceAligned = faceAligned[0:wishedFaceImgWidth, cut:(w2 - cut)]
                 # display the output images
-                rotated_face = imutils.rotate_bound(faceAligned, 270)
-                cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-                cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                cv2.imshow("Frame", rotated_face)
+                if is_full_screen_mode:
+                    rotated_face = imutils.rotate_bound(faceAligned, 270)
+                    cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+                    cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                    cv2.imshow("Frame", rotated_face)
+                else:
+                    cv2.imshow("Frame", faceAligned)
 
     update_face_model_state(faceRecognitionStat)
 
     if not is_shown_face_model:
         blank_image = np.zeros((wishedFaceImgHeight, wishedFaceImgWidth, 3), np.uint8)
-        cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        cv2.imshow("Frame", blank_image)
+        if is_full_screen_mode:          
+            cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+            cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            cv2.imshow("Frame", blank_image)
+        else:
+            cv2.imshow("Frame", blank_image)
 
     # update the FPS counter
     fps.update()
