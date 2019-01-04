@@ -28,7 +28,7 @@ wishedFaceImgHeight = 320 #int(user32.GetSystemMetrics(1) / 4)
 print("[INFO] 0 = " + str(wishedFaceImgWidth) + " 1 = " + str(wishedFaceImgHeight))
 minImgSize = int(wishedFaceImgWidth / 6)  # filter out users located too far
 imgWidth = wishedFaceImgWidth
-is_full_screen_mode = True
+is_full_screen_mode = False
 
 
 is_shown_face_model = False
@@ -118,7 +118,8 @@ fa = FaceAligner(predictor, desiredLeftEye=(0.38, 0.38), desiredFaceWidth=imgWid
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
+vs = VideoStream(src=0, resolution=(wishedFaceImgHeight, wishedFaceImgWidth)).start()
+
 time.sleep(2.0)
 
 # start the FPS throughput estimator
@@ -127,10 +128,9 @@ fps = FPS().start()
 # loop over frames from the video file stream
 while True:
     # grab the frame from the threaded video stream
-    frame = vs.read()
+    image = vs.read()
 
     # load the input image, resize it, and convert it to grayscale
-    image = imutils.resize(frame, width=imgWidth)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Detect faces
