@@ -11,29 +11,31 @@ import cv2
 import dlib
 import imutils
 import numpy as np
+import sys
 from imutils.face_utils import FaceAligner
 from imutils.face_utils import rect_to_bb
 from imutils.video import FPS
 from imutils.video import VideoStream
 
 # construct the argument parser and parse the arguments
+MINIMAL_RECOGNIZED_FACES_AMOUNT = 5
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--shape-predictor", required=True,
                 help="path to facial landmark predictor")
 args = vars(ap.parse_args())
 
 #user32 = ctypes.windll.user32
-wishedFaceImgWidth = 480 #int(user32.GetSystemMetrics(0) / 4)
-wishedFaceImgHeight = 320 #int(user32.GetSystemMetrics(1) / 4)
-print("[INFO] 0 = " + str(wishedFaceImgWidth) + " 1 = " + str(wishedFaceImgHeight))
-minImgSize = int(wishedFaceImgWidth / 6)  # filter out users located too far
-imgWidth = wishedFaceImgWidth
+WISHED_FACE_IMG_PIXEL_WIDTH = 480 #int(user32.GetSystemMetrics(0) / 4)
+WISHED_FACE_IMG_PIXEL_HEIGHT = 320 #int(user32.GetSystemMetrics(1) / 4)
+print("[INFO] 0 = " + str(WISHED_FACE_IMG_PIXEL_WIDTH) + " 1 = " + str(WISHED_FACE_IMG_PIXEL_HEIGHT))
+minImgSize = int(WISHED_FACE_IMG_PIXEL_WIDTH / 6)  # filter out users located too far
+imgWidth = WISHED_FACE_IMG_PIXEL_WIDTH
 is_full_screen_mode = False
 
 
 is_shown_face_model = False
 
-
+BLANK_IMAGE = np.zeros((WISHED_FACE_IMG_PIXEL_HEIGHT, WISHED_FACE_IMG_PIXEL_WIDTH, 3), np.uint8)
 lastValidFaceRecognition = 0
 faceRecognitionStat = collections.deque([], 15)
 faceRecognitionStat.appendleft(False)
@@ -59,41 +61,51 @@ def move_face_model(move_forward):
     #     ser.write("B\n")
 
 
-def is_found_face(found_faces_num, face_recognition_stat):
-    print("[DEBUG] Arg:" + str(found_faces_num))
-    if found_faces_num > 0:
-        face_recognition_stat.appendleft(True)
-        return True
-    else:
-        face_recognition_stat.appendleft(False)
-        return False
-
-
 def update_face_model_state(face_recognition_stat):
     global is_shown_face_model
     successful_recognition_amount = list(face_recognition_stat).count(True)
 
-    print("[INFO] successful_recognition_amount" + str(successful_recognition_amount))
+    print("[DEBUG] successful_recognition_amount" + str(successful_recognition_amount))
     if not is_shown_face_model:
-        if successful_recognition_amount > 5:
-            show_face_model()
+        if successful_recognition_amount > MINIMAL_RECOGNIZED_FACES_AMOUNT:
+            print("[INFO] Show face model...")
+            is_shown_face_model = True
+            move_face_model(True)
     else:
         if True not in face_recognition_stat:
-            hide_face_model()
+            print("[INFO] Hide face model...")
+            is_shown_face_model = False
+            move_face_model(False)
 
 
-def show_face_model():
-    global is_shown_face_model
-    is_shown_face_model = True
-    move_face_model(True)
-    print("[INFO] Move on face model...")
+def get_aligned_face(image, gray, face_rect):
+    face_aligned = fa.align(image, gray, face_rect)
+    cut = int((WISHED_FACE_IMG_PIXEL_WIDTH - WISHED_FACE_IMG_PIXEL_HEIGHT) / 2)
+    (h2, w2) = face_aligned.shape[:2]
+    return face_aligned[0:WISHED_FACE_IMG_PIXEL_WIDTH, cut:(w2 - cut)]
 
 
-def hide_face_model():
-    global is_shown_face_model
-    is_shown_face_model = False
-    move_face_model(False)
-    print("[INFO] Hide face model...")
+def display_image(image):
+    if is_full_screen_mode:
+        rotated_face = imutils.rotate_bound(image, 270)
+        cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("Frame", rotated_face)
+    else:
+        cv2.imshow("Frame", image)
+
+
+def get_valid_face(gray, face_recognition_stat):
+    detected_faces = detector(gray, 1)
+    detected_faces_amount = len(detected_faces)
+    print("[INFO] detected " + str(detected_faces_amount) + " faces")
+    if detected_faces_amount > 0:
+        valid_face = get_the_biggest_face(detected_faces)
+        if valid_face is not None:
+            face_recognition_stat.appendleft(True)
+            return valid_face
+    face_recognition_stat.appendleft(False)
+    return None
 
 
 def get_the_biggest_face(rects):
@@ -118,12 +130,14 @@ fa = FaceAligner(predictor, desiredLeftEye=(0.38, 0.38), desiredFaceWidth=imgWid
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-vs = VideoStream(src=0, resolution=(wishedFaceImgHeight, wishedFaceImgWidth)).start()
+# vs = VideoStream(src=0, resolution=(WISHED_FACE_IMG_PIXEL_HEIGHT, WISHED_FACE_IMG_PIXEL_WIDTH)).start()
+vs = VideoStream(src=0).start()
 
 time.sleep(2.0)
 
 # start the FPS throughput estimator
 fps = FPS().start()
+
 
 # loop over frames from the video file stream
 while True:
@@ -133,43 +147,16 @@ while True:
     # load the input image, resize it, and convert it to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Detect faces
-    rects = detector(gray, 1)
-    detectedFacesNum = len(rects)
-    print("[INFO] detected " + str(detectedFacesNum) + " faces")
 
-    if is_found_face(detectedFacesNum, faceRecognitionStat) and is_shown_face_model:
-        # find the closest face
-        rect = get_the_biggest_face(rects)
-        if rect is not None:
-            (x, y, w, h) = rect_to_bb(rect)
-            new_image = image[y:y + h, x:x + w]
-            (hNotNull, wNotNull) = new_image.shape[:2]
-            if w > 0 and wNotNull > minImgSize and hNotNull > minImgSize:
-                faceOrig = imutils.resize(new_image, width=wishedFaceImgWidth)
-                faceAligned = fa.align(image, gray, rect)
-                cut = int((wishedFaceImgWidth - wishedFaceImgHeight) / 2)
-                (h2, w2) = faceAligned.shape[:2]
-                faceAligned = faceAligned[0:wishedFaceImgWidth, cut:(w2 - cut)]
-                # display the output images
-                if is_full_screen_mode:
-                    rotated_face = imutils.rotate_bound(faceAligned, 270)
-                    cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-                    cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                    cv2.imshow("Frame", rotated_face)
-                else:
-                    cv2.imshow("Frame", faceAligned)
+    face = get_valid_face(gray, faceRecognitionStat)
+    if face is not None and is_shown_face_model:
+        aligned_face_image = get_aligned_face(image, gray, face)
+        display_image(aligned_face_image)
 
     update_face_model_state(faceRecognitionStat)
 
     if not is_shown_face_model:
-        blank_image = np.zeros((wishedFaceImgHeight, wishedFaceImgWidth, 3), np.uint8)
-        if is_full_screen_mode:          
-            cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-            cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-            cv2.imshow("Frame", blank_image)
-        else:
-            cv2.imshow("Frame", blank_image)
+        display_image(BLANK_IMAGE)
 
     # update the FPS counter
     fps.update()
@@ -188,3 +175,4 @@ print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 # do a bit of cleanup
 cv2.destroyAllWindows()
 vs.stop()
+sys.exit()
