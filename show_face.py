@@ -1,10 +1,9 @@
 # USAGE
-# python show_face.py --detector face_detection_model  --embedding-model openface_nn4.small2.v1.t7 --recognizer output/recognizer.pickle --le output/le.pickle
+# python show_face.py --detector face_detection_model
 # import the necessary packages
 import argparse
 import ctypes
 import os
-import pickle
 import time
 
 import cv2
@@ -17,16 +16,12 @@ from imutils.video import VideoStream
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--detector", required=True,
                 help="path to OpenCV's deep learning face detector")
-ap.add_argument("-m", "--embedding-model", required=True,
-                help="path to OpenCV's deep learning face embedding model")
-ap.add_argument("-r", "--recognizer", required=True,
-                help="path to model trained to recognize faces")
-ap.add_argument("-l", "--le", required=True,
-                help="path to label encoder")
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
                 help="minimum probability to filter weak detections")
 ap.add_argument("-f", "--fullscreen", type=bool, default=True,
                 help="Enter presentation mode in fullscreen")
+ap.add_argument("-m", "--minimgwidth", type=int, default=100,
+                help="Minimal detected face width size")
 args = vars(ap.parse_args())
 
 # load our serialized face detector from disk
@@ -36,14 +31,6 @@ modelPath = os.path.sep.join([args["detector"],
                               "res10_300x300_ssd_iter_140000.caffemodel"])
 detector = cv2.dnn.readNetFromCaffe(protoPath, modelPath)
 
-# load our serialized face embedding model from disk
-print("[INFO] loading face recognizer...")
-embedder = cv2.dnn.readNetFromTorch(args["embedding_model"])
-
-# load the actual face recognition model along with the label encoder
-recognizer = pickle.loads(open(args["recognizer"], "rb").read())
-le = pickle.loads(open(args["le"], "rb").read())
-
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
 vs = VideoStream(src=0).start()
@@ -52,13 +39,12 @@ time.sleep(2.0)
 user32 = ctypes.windll.user32
 screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 screenHeight = user32.GetSystemMetrics(0)
-minImgRes = 150
 
 # start the FPS throughput estimator
 fps = FPS().start()
 
 
-def display_frame(face):
+def display_face_frame(face):
     face = cv2.resize(face, (faceHeight * ratio, faceWidth * ratio))
     if args["fullscreen"]:
         rotated_face = imutils.rotate_bound(face, 270)
@@ -69,15 +55,30 @@ def display_frame(face):
         cv2.imshow("Debug frame", face)
 
 
+def get_biggest_face_coordinates(detections, w, h):
+    biggest_width = args["minimgwidth"]
+    biggest_rect = None
+
+    for i in range(0, detections.shape[2]):
+        # extract the confidence associated with the prediction
+        confidence = detections[0, 0, i, 2]
+
+        # filter out weak detections
+        if confidence > args["confidence"]:
+            # compute the (x, y)-coordinates of the bounding box for the face
+            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+            (startX, startY, endX, endY) = box.astype("int")
+            detection_width = endX - startX
+            if biggest_width < detection_width:
+                biggest_width = detection_width
+                biggest_rect = (startX, startY, endX, endY)
+    return biggest_rect
+
+
 # loop over frames from the video file stream
 while True:
     # grab the frame from the threaded video stream
     frame = vs.read()
-
-    # resize the frame to have a width of 600 pixels (while
-    # maintaining the aspect ratio), and then grab the image
-    # dimensions
-    # frame = imutils.resize(frame, width=1200)
     (h, w) = frame.shape[:2]
 
     # construct a blob from the image
@@ -90,31 +91,22 @@ while True:
     detector.setInput(imageBlob)
     detections = detector.forward()
 
-    # loop over the detections
-    for i in range(0, detections.shape[2]):
-        # extract the confidence (i.e., probability) associated with
-        # the prediction
-        confidence = detections[0, 0, i, 2]
+    rect = get_biggest_face_coordinates(detections, w, h)
+    if rect is not None:
+        (startX, startY, endX, endY) = rect
 
-        # filter out weak detections
-        if confidence > args["confidence"]:
-            # compute the (x, y)-coordinates of the bounding box for
-            # the face
-            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-            (startX, startY, endX, endY) = box.astype("int")
+        # extract the face ROI
+        faceHeightError = (endY - startY) / 7
+        faceWidthError = (endX - startX) / 8
+        face = frame[startY - faceHeightError:endY + faceHeightError, startX - faceWidthError:endX + faceWidthError]
+        faceHeight = endY - startY + 2 * faceHeightError
+        faceWidth = endX - startX + 2 * faceWidthError
+        ratio = screenHeight / faceHeight
+        (fH, fW) = face.shape[:2]
 
-            # extract the face ROI
-            faceHeightError = (endY - startY) / 7
-            faceWidthError = (endX - startX) / 8
-            face = frame[startY - faceHeightError:endY + faceHeightError, startX - faceWidthError:endX + faceWidthError]
-            faceHeight = endY - startY + 2 * faceHeightError
-            faceWidth = endX - startX + 2 * faceWidthError
-            ratio = screenHeight / faceHeight
-            (fH, fW) = face.shape[:2]
-
-            # ensure the face width and height are sufficiently large
-            if (fW > minImgRes or fH > minImgRes) and (fW > 0 and fH > 0):
-                display_frame(face)
+        # ensure the face width and height are sufficiently large
+        if (fW > 0 and fH > 0) and fW > args["minimgwidth"]:
+            display_face_frame(face)
 
     # update the FPS counter
     fps.update()
