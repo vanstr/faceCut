@@ -20,7 +20,7 @@ ap.add_argument("-c", "--confidence", type=float, default=0.5,
                 help="minimum probability to filter weak detections")
 ap.add_argument("-f", "--fullscreen", type=bool, default=True,
                 help="Enter presentation mode in fullscreen")
-ap.add_argument("-m", "--minimgwidth", type=int, default=100,
+ap.add_argument("-m", "--minimgwidth", type=int, default=80,
                 help="Minimal detected face width size")
 args = vars(ap.parse_args())
 
@@ -39,14 +39,19 @@ time.sleep(2.0)
 user32 = ctypes.windll.user32
 screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 screenHeight = user32.GetSystemMetrics(0)
+screenWidth = user32.GetSystemMetrics(1)
 
 # start the FPS throughput estimator
 fps = FPS().start()
 
+overlay = cv2.imread('loreta/overlay.jpg')
+overlay = cv2.resize(overlay, (screenHeight, screenWidth))
+
 
 def display_face_frame(face):
-    face = cv2.resize(face, (faceHeight * ratio, faceWidth * ratio))
     if args["fullscreen"]:
+        face = cv2.resize(face, (screenHeight, screenWidth))
+        face = cv2.addWeighted(face, 1, overlay, -1, 0)
         rotated_face = imutils.rotate_bound(face, 270)
         cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -75,6 +80,19 @@ def get_biggest_face_coordinates(detections, w, h):
     return biggest_rect
 
 
+def get_adapted_face(rect):
+    (startX, startY, endX, endY) = rect
+    nose_coordinates = (float(startX + endX) / 2, float(startY + endY) / 2)
+
+    w = endX - startX
+    h = w / 9 * 16
+    startY = int(nose_coordinates[1] - float(h / 2))
+    endY = int(nose_coordinates[1] + float(h / 2))
+
+    face = frame[startY:endY, startX:endX]
+    return face
+
+
 # loop over frames from the video file stream
 while True:
     # grab the frame from the threaded video stream
@@ -93,15 +111,9 @@ while True:
 
     rect = get_biggest_face_coordinates(detections, w, h)
     if rect is not None:
-        (startX, startY, endX, endY) = rect
 
         # extract the face ROI
-        faceHeightError = (endY - startY) / 7
-        faceWidthError = (endX - startX) / 8
-        face = frame[startY - faceHeightError:endY + faceHeightError, startX - faceWidthError:endX + faceWidthError]
-        faceHeight = endY - startY + 2 * faceHeightError
-        faceWidth = endX - startX + 2 * faceWidthError
-        ratio = screenHeight / faceHeight
+        face = get_adapted_face(rect)
         (fH, fW) = face.shape[:2]
 
         # ensure the face width and height are sufficiently large
