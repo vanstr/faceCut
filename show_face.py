@@ -46,9 +46,9 @@ print("[INFO] starting video stream...")
 vs = VideoStream(src=0).start()
 time.sleep(2.0)
 
-
 user32 = ctypes.windll.user32
 screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+screenHeight = user32.GetSystemMetrics(0)
 minImgRes = 150
 
 # start the FPS throughput estimator
@@ -92,19 +92,18 @@ while True:
             faceHeightError = (endY - startY) / 7
             faceWidthError = (endX - startX) / 8
             face = frame[startY - faceHeightError:endY + faceHeightError, startX - faceWidthError:endX + faceWidthError]
-            screenHeight = user32.GetSystemMetrics(0)
             faceHeight = startY - faceHeightError + endY + faceHeightError
             faceWidth = startX - faceWidthError + endX + faceWidthError
             ratio = screenHeight / faceHeight
             (fH, fW) = face.shape[:2]
 
             # ensure the face width and height are sufficiently large
-            if fW > minImgRes or fH > minImgRes:
+            if (fW > minImgRes or fH > minImgRes) and (fW > 0 and fH > 0):
                 face = cv2.resize(face, (faceHeight * ratio, faceWidth * ratio))
                 # show the output frame
-                # rotatedface = rotated = imutils.rotate_bound(face, 90)
-                # cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-                # cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                face = imutils.rotate_bound(face, 90)
+                cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+                cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
                 cv2.imshow("Frame", face)
                 break
 
