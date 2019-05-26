@@ -1,16 +1,17 @@
 # USAGE
 # python show_face.py --detector face_detection_model  --embedding-model openface_nn4.small2.v1.t7 --recognizer output/recognizer.pickle --le output/le.pickle
 # import the necessary packages
-from imutils.video import VideoStream
-from imutils.video import FPS
-import numpy as np
 import argparse
-import imutils
+import ctypes
+import os
 import pickle
 import time
+
 import cv2
-import os
-import ctypes
+import imutils
+import numpy as np
+from imutils.video import FPS
+from imutils.video import VideoStream
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -24,6 +25,8 @@ ap.add_argument("-l", "--le", required=True,
                 help="path to label encoder")
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
                 help="minimum probability to filter weak detections")
+ap.add_argument("-f", "--fullscreen", type=bool, default=True,
+                help="Enter presentation mode in fullscreen")
 args = vars(ap.parse_args())
 
 # load our serialized face detector from disk
@@ -53,6 +56,18 @@ minImgRes = 150
 
 # start the FPS throughput estimator
 fps = FPS().start()
+
+
+def display_frame(face):
+    face = cv2.resize(face, (faceHeight * ratio, faceWidth * ratio))
+    if args["fullscreen"]:
+        rotated_face = imutils.rotate_bound(face, 270)
+        cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("Frame", rotated_face)
+    else:
+        cv2.imshow("Debug frame", face)
+
 
 # loop over frames from the video file stream
 while True:
@@ -92,20 +107,14 @@ while True:
             faceHeightError = (endY - startY) / 7
             faceWidthError = (endX - startX) / 8
             face = frame[startY - faceHeightError:endY + faceHeightError, startX - faceWidthError:endX + faceWidthError]
-            faceHeight = startY - faceHeightError + endY + faceHeightError
-            faceWidth = startX - faceWidthError + endX + faceWidthError
+            faceHeight = endY - startY + 2 * faceHeightError
+            faceWidth = endX - startX + 2 * faceWidthError
             ratio = screenHeight / faceHeight
             (fH, fW) = face.shape[:2]
 
             # ensure the face width and height are sufficiently large
             if (fW > minImgRes or fH > minImgRes) and (fW > 0 and fH > 0):
-                face = cv2.resize(face, (faceHeight * ratio, faceWidth * ratio))
-                # show the output frame
-                face = imutils.rotate_bound(face, 90)
-                cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
-                cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                cv2.imshow("Frame", face)
-                break
+                display_frame(face)
 
     # update the FPS counter
     fps.update()
@@ -118,7 +127,7 @@ while True:
 
 # stop the timer and display FPS information
 fps.stop()
-print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
+print("[INFO] elapsed time: {:.2f}".format(fps.elapsed()))
 print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 
 # do a bit of cleanup
