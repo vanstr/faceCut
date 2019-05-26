@@ -16,29 +16,35 @@ from imutils.face_utils import rect_to_bb
 from imutils.video import FPS
 from imutils.video import VideoStream
 
+################### User configurable properties  ###################
+#user32 = ctypes.windll.user32
+wishedFaceImgWidth = 320 #int(user32.GetSystemMetrics(0) / 4)
+wishedFaceImgHeight = 240 #int(user32.GetSystemMetrics(1) / 4)
+minImgSize = int(wishedFaceImgWidth / 6)  # filter out users located too far
+imgWidth = wishedFaceImgWidth
+is_full_screen_mode = False
+min_amount_of_detection_in_quee_to_show_face = 5
+face_statistic_quee = 15
+#####################################################################
+
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--shape-predictor", required=True,
                 help="path to facial landmark predictor")
 args = vars(ap.parse_args())
 
-#user32 = ctypes.windll.user32
-wishedFaceImgWidth = 480 #int(user32.GetSystemMetrics(0) / 4)
-wishedFaceImgHeight = 320 #int(user32.GetSystemMetrics(1) / 4)
-print("[INFO] 0 = " + str(wishedFaceImgWidth) + " 1 = " + str(wishedFaceImgHeight))
-minImgSize = int(wishedFaceImgWidth / 6)  # filter out users located too far
-imgWidth = wishedFaceImgWidth
-is_full_screen_mode = True
+
 
 
 is_shown_face_model = False
-
-
 lastValidFaceRecognition = 0
-faceRecognitionStat = collections.deque([], 15)
+faceRecognitionStat = collections.deque([], face_statistic_quee)
 faceRecognitionStat.appendleft(False)
 
-print(faceRecognitionStat)
+print("[INFO] Configurations:")
+print("[INFO] - img resolution 0 = " + str(wishedFaceImgWidth) + " 1 = " + str(wishedFaceImgHeight))
+print("[INFO] - min face detecction = 5, " + str(faceRecognitionStat))
 
 
 #
@@ -52,7 +58,7 @@ print(faceRecognitionStat)
 
 def move_face_model(move_forward):
     # global ser
-    print("[INFO] move:" + str(move_forward))
+    print("[INFO] move face:" + str(move_forward))
     # if move_forward:
     #     ser.write("F\n")
     # else:
@@ -60,7 +66,7 @@ def move_face_model(move_forward):
 
 
 def is_found_face(found_faces_num, face_recognition_stat):
-    print("[DEBUG] Arg:" + str(found_faces_num))
+    print("[DEBUG] is_found_face amount:" + str(found_faces_num))
     if found_faces_num > 0:
         face_recognition_stat.appendleft(True)
         return True
@@ -73,9 +79,9 @@ def update_face_model_state(face_recognition_stat):
     global is_shown_face_model
     successful_recognition_amount = list(face_recognition_stat).count(True)
 
-    print("[INFO] successful_recognition_amount" + str(successful_recognition_amount))
+    print("[DEBUG] successful_recognition_amount" + str(successful_recognition_amount))
     if not is_shown_face_model:
-        if successful_recognition_amount > 5:
+        if successful_recognition_amount > min_amount_of_detection_in_quee_to_show_face:
             show_face_model()
     else:
         if True not in face_recognition_stat:
@@ -86,14 +92,14 @@ def show_face_model():
     global is_shown_face_model
     is_shown_face_model = True
     move_face_model(True)
-    print("[INFO] Move on face model...")
+    print("[DEBUG] Move on face model...")
 
 
 def hide_face_model():
     global is_shown_face_model
     is_shown_face_model = False
     move_face_model(False)
-    print("[INFO] Hide face model...")
+    print("[DEBUG] Hide face model...")
 
 
 def get_the_biggest_face(rects):
@@ -134,7 +140,7 @@ while True:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Detect faces
-    rects = detector(gray, 1)
+    rects = detector(gray, 0)
     detectedFacesNum = len(rects)
     print("[INFO] detected " + str(detectedFacesNum) + " faces")
 
