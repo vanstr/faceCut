@@ -10,7 +10,6 @@ import cv2
 import imutils
 import numpy as np
 from imutils.video import FPS
-from imutils.video import VideoStream
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -33,7 +32,18 @@ detector = cv2.dnn.readNetFromCaffe(protoPath, modelPath)
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
+# vs = VideoStream(src=0).start()
+# vs.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
+# vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
+
+vs = cv2.VideoCapture(0)
+# Check success
+if not vs.isOpened():
+    raise Exception("Could not open video device")
+# Set properties. Each returns === True on success (i.e. correct resolution)
+vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
 time.sleep(2.0)
 
 user32 = ctypes.windll.user32
@@ -46,6 +56,9 @@ fps = FPS().start()
 
 overlay = cv2.imread('loreta/overlay.jpg')
 overlay = cv2.resize(overlay, (screenHeight, screenWidth))
+
+background = cv2.imread('loreta/background.png')
+background = cv2.resize(background, (screenHeight, screenWidth))
 
 
 def display_face_frame(face):
@@ -96,9 +109,9 @@ def get_adapted_face(rect):
 # loop over frames from the video file stream
 while True:
     # grab the frame from the threaded video stream
-    frame = vs.read()
+    rate, frame = vs.read()
     (h, w) = frame.shape[:2]
-
+    print("[INFO] - img width, " + str(w))
     # construct a blob from the image
     imageBlob = cv2.dnn.blobFromImage(
         cv2.resize(frame, (300, 300)), 1.0, (300, 300),
@@ -136,4 +149,4 @@ print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 
 # do a bit of cleanup
 cv2.destroyAllWindows()
-vs.stop()
+vs.release()
