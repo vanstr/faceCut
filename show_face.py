@@ -18,9 +18,9 @@ ap.add_argument("-d", "--detector", required=True,
                 help="path to OpenCV's deep learning face detector")
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
                 help="minimum probability to filter weak detections")
-ap.add_argument("-f", "--fullscreen", type=bool, default=True,
+ap.add_argument("-f", "--fullscreen", type=bool, default=False,
                 help="Enter presentation mode in fullscreen")
-ap.add_argument("-m", "--minimgwidth", type=int, default=80,
+ap.add_argument("-m", "--minimgwidth", type=int, default=100,
                 help="Minimal detected face width size")
 args = vars(ap.parse_args())
 
@@ -41,6 +41,9 @@ if not vs.isOpened():
 faceSearchAreaWidth = 300
 cameraResWidth = 1280
 cameraResHeight = 720
+fourcc = cv2.VideoWriter.fourcc('M', 'J', 'P', 'G')
+vs.set(cv2.CAP_PROP_FOURCC, fourcc)
+vs.set(cv2.CAP_PROP_FPS, 30)
 vs.set(cv2.CAP_PROP_FRAME_WIDTH, cameraResWidth)
 vs.set(cv2.CAP_PROP_FRAME_HEIGHT, cameraResHeight)
 
@@ -182,7 +185,7 @@ def updateFoundFaceStat(detections):
 def show_face_of_frame(face_searching_frame):
     # construct a blob from the image
     imageBlob = cv2.dnn.blobFromImage(
-        cv2.resize(face_searching_frame, (300, 300)), 1.0, (300, 300),
+        face_searching_frame, 1.0, (300, 300),
         (104.0, 177.0, 123.0), swapRB=False, crop=False)
     # apply OpenCV's deep learning-based face detector to localize
     # faces in the input image
