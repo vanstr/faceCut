@@ -18,11 +18,20 @@ ap.add_argument("-d", "--detector", required=True,
                 help="path to OpenCV's deep learning face detector")
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
                 help="minimum probability to filter weak detections")
-ap.add_argument("-f", "--fullscreen", type=bool, default=False,
+ap.add_argument("-f", "--fullscreen", type=bool, default=True,
                 help="Enter presentation mode in fullscreen")
-ap.add_argument("-m", "--minimgwidth", type=int, default=100,
+ap.add_argument("-m", "--minimgwidth", type=int, default=80,
                 help="Minimal detected face width size")
 args = vars(ap.parse_args())
+
+min_amount_of_detection_in_quee_to_show_face = 30
+face_statistic_quee = 40
+faceSearchAreaWidth = 600
+cameraResWidth = 1920
+cameraResHeight = 1080
+# cameraResWidth = 3840
+# cameraResHeight = 2160
+cameraFPS = 30
 
 # load our serialized face detector from disk
 print("[INFO] loading face detector...")
@@ -38,12 +47,9 @@ vs = cv2.VideoCapture(0)
 if not vs.isOpened():
     raise Exception("Could not open video device")
 
-faceSearchAreaWidth = 300
-cameraResWidth = 1280
-cameraResHeight = 720
+
 fourcc = cv2.VideoWriter.fourcc('M', 'J', 'P', 'G')
 vs.set(cv2.CAP_PROP_FOURCC, fourcc)
-vs.set(cv2.CAP_PROP_FPS, 30)
 vs.set(cv2.CAP_PROP_FRAME_WIDTH, cameraResWidth)
 vs.set(cv2.CAP_PROP_FRAME_HEIGHT, cameraResHeight)
 
@@ -62,14 +68,14 @@ overlay = cv2.resize(overlay, (screenHeight, screenWidth))
 background = cv2.imread('loreta/background.png')
 background = cv2.resize(background, (screenHeight, screenWidth))
 
+blank_image = np.zeros((screenHeight, screenWidth, 3), np.uint8)
+
 centerX = cameraResWidth // 2
 centerY = cameraResHeight // 2
 
 latest_nose_coordinates_x = centerX
 latest_nose_coordinates_y = centerY
 
-min_amount_of_detection_in_quee_to_show_face = 5
-face_statistic_quee = 15
 is_shown_face_model = False
 lastValidFaceRecognition = 0
 face_recognition_stat = collections.deque([], face_statistic_quee)
@@ -192,6 +198,8 @@ def show_face_of_frame(face_searching_frame):
     detector.setInput(imageBlob)
     detections = detector.forward()
     (h, w) = face_searching_frame.shape[:2]
+    # print("[INFO] frame size " + str(w) + " : " + str(h))
+
     rect = get_biggest_face_coordinates(detections, w, h)
     if rect is not None:
         # extract the face ROI
@@ -203,7 +211,7 @@ def show_face_of_frame(face_searching_frame):
             face_recognition_stat.appendleft(True)
             if is_shown_face_model:
                 display_face_frame(face)
-            updateNoseCoordinates(rect)
+                # updateNoseCoordinates(rect)
 
         else:
             face_recognition_stat.appendleft(False)
@@ -218,7 +226,6 @@ def show_face_of_frame(face_searching_frame):
     update_face_model_state()
 
     if not is_shown_face_model and args["fullscreen"]:
-        blank_image = np.zeros((screenHeight, screenWidth, 3), np.uint8)
         cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.imshow("Frame", blank_image)
@@ -247,7 +254,7 @@ def reset_nose_coordinates():
     latest_nose_coordinates_y = centerY
 
 
-def get_face_tracked_area():
+def get_face_tracked_area(frame):
     startX = latest_nose_coordinates_x - faceSearchAreaWidth / 2
     startY = latest_nose_coordinates_y - faceSearchAreaWidth / 2
 
@@ -271,7 +278,7 @@ while True:
     # grab the frame from the threaded video stream
     rate, frame = vs.read()
 
-    focused_frame = get_face_tracked_area()
+    focused_frame = frame  # get_face_tracked_area(frame)
     cv2.imshow("focused_frame", focused_frame)
     show_face_of_frame(focused_frame)
 
