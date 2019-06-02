@@ -13,6 +13,7 @@ import numpy as np
 from imutils.video import FPS
 
 # construct the argument parser and parse the arguments
+backround_video_path = "loreta/video.mp4"
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--detector", required=True,
                 help="path to OpenCV's deep learning face detector")
@@ -27,8 +28,11 @@ args = vars(ap.parse_args())
 min_amount_of_detection_in_quee_to_show_face = 30
 face_statistic_quee = 40
 faceSearchAreaWidth = 600
-cameraResWidth = 1920
-cameraResHeight = 1080
+
+cameraResWidth = 1280
+cameraResHeight = 720
+# cameraResWidth = 1920
+# cameraResHeight = 1080
 # cameraResWidth = 3840
 # cameraResHeight = 2160
 cameraFPS = 30
@@ -40,10 +44,12 @@ modelPath = os.path.sep.join([args["detector"],
                               "res10_300x300_ssd_iter_140000.caffemodel"])
 detector = cv2.dnn.readNetFromCaffe(protoPath, modelPath)
 
+print("[INFO] loading background video stream")
+backgr = cv2.VideoCapture(backround_video_path)
+
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
 vs = cv2.VideoCapture(0)
-# Check success
 if not vs.isOpened():
     raise Exception("Could not open video device")
 
@@ -64,9 +70,6 @@ fps = FPS().start()
 
 overlay = cv2.imread('loreta/overlay.jpg')
 overlay = cv2.resize(overlay, (screenHeight, screenWidth))
-
-background = cv2.imread('loreta/background.png')
-background = cv2.resize(background, (screenHeight, screenWidth))
 
 blank_image = np.zeros((screenHeight, screenWidth, 3), np.uint8)
 
@@ -189,6 +192,7 @@ def updateFoundFaceStat(detections):
 
 
 def show_face_of_frame(face_searching_frame):
+    global backgr
     # construct a blob from the image
     imageBlob = cv2.dnn.blobFromImage(
         face_searching_frame, 1.0, (300, 300),
@@ -226,9 +230,14 @@ def show_face_of_frame(face_searching_frame):
     update_face_model_state()
 
     if not is_shown_face_model and args["fullscreen"]:
+        brate, bframe = backgr.read()
         cv2.namedWindow("Frame", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("Frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        cv2.imshow("Frame", blank_image)
+        if brate == True:
+            cv2.imshow("Frame", bframe)
+        else:
+            print("[INFO] restart background video stream")
+            backgr = cv2.VideoCapture(backround_video_path)
 
 
 def updateNoseCoordinates(rect):
@@ -299,3 +308,4 @@ print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 # do a bit of cleanup
 cv2.destroyAllWindows()
 vs.release()
+backgr.release()
