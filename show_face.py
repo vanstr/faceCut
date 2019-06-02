@@ -3,7 +3,6 @@
 # import the necessary packages
 import argparse
 import collections
-import ctypes
 import os
 import time
 
@@ -13,6 +12,7 @@ import numpy as np
 from imutils.video import FPS
 
 # construct the argument parser and parse the arguments
+face_mask_path = 'loreta/overlay.jpg'
 backround_video_path = "loreta/video.mp4"
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--detector", required=True,
@@ -29,10 +29,10 @@ min_amount_of_detection_in_quee_to_show_face = 30
 face_statistic_quee = 40
 faceSearchAreaWidth = 600
 
-cameraResWidth = 1280
-cameraResHeight = 720
-# cameraResWidth = 1920
-# cameraResHeight = 1080
+# cameraResWidth = 1280
+# cameraResHeight = 720
+cameraResWidth = 1920
+cameraResHeight = 1080
 # cameraResWidth = 3840
 # cameraResHeight = 2160
 cameraFPS = 30
@@ -49,35 +49,29 @@ backgr = cv2.VideoCapture(backround_video_path)
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-vs = cv2.VideoCapture(0)
-if not vs.isOpened():
-    raise Exception("Could not open video device")
-
-
-fourcc = cv2.VideoWriter.fourcc('M', 'J', 'P', 'G')
-vs.set(cv2.CAP_PROP_FOURCC, fourcc)
-vs.set(cv2.CAP_PROP_FRAME_WIDTH, cameraResWidth)
-vs.set(cv2.CAP_PROP_FRAME_HEIGHT, cameraResHeight)
-
+# vs = cv2.VideoCapture(0)
+# if not vs.isOpened():
+#     raise Exception("Could not open video device")
+#
+# fourcc = cv2.VideoWriter.fourcc('M', 'J', 'P', 'G')
+# vs.set(cv2.CAP_PROP_FOURCC, fourcc)
+# vs.set(cv2.CAP_PROP_FRAME_WIDTH, cameraResWidth)
+# vs.set(cv2.CAP_PROP_FRAME_HEIGHT, cameraResHeight)
+vs = cv2.VideoCapture("loreta/example.mp4")
 time.sleep(2.0)
-user32 = ctypes.windll.user32
-screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
-screenHeight = user32.GetSystemMetrics(0)
-screenWidth = user32.GetSystemMetrics(1)
+screenHeight = 720
+screenWidth = 1280
 
 # start the FPS throughput estimator
 fps = FPS().start()
 
-overlay = cv2.imread('loreta/overlay.jpg')
+overlay = cv2.imread(face_mask_path)
 overlay = cv2.resize(overlay, (screenHeight, screenWidth))
 
 blank_image = np.zeros((screenHeight, screenWidth, 3), np.uint8)
 
-centerX = cameraResWidth // 2
-centerY = cameraResHeight // 2
-
-latest_nose_coordinates_x = centerX
-latest_nose_coordinates_y = centerY
+# y,y,x,x
+last_detected_face_rect = (0, cameraResHeight, 0, cameraResWidth)
 
 is_shown_face_model = False
 lastValidFaceRecognition = 0
@@ -119,7 +113,7 @@ def update_face_model_state():
             show_face_model()
     else:
         if True not in face_recognition_stat:
-            reset_nose_coordinates()
+            reset_last_detected_coordinates()
             hide_face_model()
 
 
@@ -173,10 +167,9 @@ def get_biggest_face_coordinates(detections, w, h):
 def get_adapted_face(rect, face_searching_frame):
     (startX, startY, endX, endY) = rect
     # w = endX - startX
-    # h = w / 9 * 16
-    # startY = int(nose_coordinates[1] - float(h / 2))
-    # endY = int(nose_coordinates[1] + float(h / 2))
-
+    # h = float(w / 9 * 16)
+    # startY = int(latest_nose_coordinates_y - float(h / 2))
+    # endY = int(latest_nose_coordinates_y + float(h / 2))
     return face_searching_frame[startY:endY, startX:endX]
 
 
@@ -215,7 +208,7 @@ def show_face_of_frame(face_searching_frame):
             face_recognition_stat.appendleft(True)
             if is_shown_face_model:
                 display_face_frame(face)
-                # updateNoseCoordinates(rect)
+                updateLastDetectedCoordinates(rect)
 
         else:
             face_recognition_stat.appendleft(False)
@@ -240,46 +233,44 @@ def show_face_of_frame(face_searching_frame):
             backgr = cv2.VideoCapture(backround_video_path)
 
 
-def updateNoseCoordinates(rect):
-    global latest_nose_coordinates_x
-    global latest_nose_coordinates_y
+def updateLastDetectedCoordinates(rect):
+    global last_detected_face_rect
     (startX, startY, endX, endY) = rect
-    if startY > 0 and startX > 0 and endY - startY <= faceSearchAreaWidth and endX - startX <= faceSearchAreaWidth:
-        nose_coordinates = (float(startX + endX) / 2, float(startY + endY) / 2)
-        latest_nose_coordinates_x = latest_nose_coordinates_x - faceSearchAreaWidth / 2 + int(
-            nose_coordinates[0])
-        latest_nose_coordinates_y = latest_nose_coordinates_y - faceSearchAreaWidth / 2 + int(
-            nose_coordinates[1])
-        print("[INFO] Updated nose coordinates to "
-              + str(latest_nose_coordinates_x) + ":" + str(latest_nose_coordinates_y))
+    last_detected_face_rect = (startY, endY, startX, endX)
+    print("[INFO] Updated coordinates to "
+          + str(startY) + ":" + str(endY) + " " + str(startX) + ":" + str(endX))
 
 
-def reset_nose_coordinates():
-    global latest_nose_coordinates_x
-    global latest_nose_coordinates_y
-    print("[INFO] Reset nose coordinates to center")
-
-    latest_nose_coordinates_x = centerX
-    latest_nose_coordinates_y = centerY
+def reset_last_detected_coordinates():
+    global last_detected_face_rect
+    print("[INFO] Reset detected coordinates ")
+    last_detected_face_rect = (0, cameraResHeight, 0, cameraResWidth)
 
 
 def get_face_tracked_area(frame):
-    startX = latest_nose_coordinates_x - faceSearchAreaWidth / 2
-    startY = latest_nose_coordinates_y - faceSearchAreaWidth / 2
+    global last_detected_face_rect
+    (startY, endY, startX, endX) = last_detected_face_rect
+    if startY == 0 and startX == 0 and endY == cameraResHeight: #TODO improve
+        return frame
+    else:
+        errorY = (endY - startY) / 4
+        errorX = (endX - startX) / 4
+        startX -= errorX
+        startY -= errorY
+        endY += errorY
+        endX += errorX
 
-    if startX < 0:
-        startX = 0
-    endX = startX + faceSearchAreaWidth
-    if endX > screenWidth:
-        endX = screenWidth
+        if startX < 0:
+            startX = 0
+        if endX > cameraResWidth:
+            endX = cameraResWidth
 
-    if startY < 0:
-        startY = 0
-    endY = startY + faceSearchAreaWidth
-    if endY > screenHeight:
-        endY = screenHeight
+        if startY < 0:
+            startY = 0
+        if endY > cameraResHeight:
+            endY = cameraResHeight
 
-    return frame[startY:endY, startX:endX]
+        return frame[startY:endY, startX:endX]
 
 
 # loop over frames from the video file stream
@@ -287,7 +278,7 @@ while True:
     # grab the frame from the threaded video stream
     rate, frame = vs.read()
 
-    focused_frame = frame  # get_face_tracked_area(frame)
+    focused_frame = get_face_tracked_area(frame)
     cv2.imshow("focused_frame", focused_frame)
     show_face_of_frame(focused_frame)
 
